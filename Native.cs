@@ -60,7 +60,24 @@ static class Native
     public const uint SWP_FRAMECHANGED = 0x0020, GA_ROOT = 2;
     public const int SW_RESTORE = 9;
 
+    public const long WS_EX_DLGMODALFRAME = 0x1, WS_EX_TOPMOST = 0x8, WS_EX_WINDOWEDGE = 0x100, WS_EX_CLIENTEDGE = 0x200,
+        WS_EX_STATICEDGE = 0x20000, WS_EX_APPWINDOW = 0x40000;
+
     [DllImport("user32.dll")] public static extern IntPtr SetParent(IntPtr child, IntPtr parent);
+    [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr parent, EnumWindowsProc cb, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr hwnd, out RECT rect);
+    [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr hwnd, ref POINT p);
+    [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
+    public const uint PW_CLIENTONLY = 1, PW_RENDERFULLCONTENT = 2;
+
+    /// <summary>客戶區（不含系統標題列、邊框）在螢幕上的位置。</summary>
+    public static Rectangle ClientScreenRect(IntPtr hwnd)
+    {
+        GetClientRect(hwnd, out var c);
+        var p = new POINT();
+        ClientToScreen(hwnd, ref p);
+        return new Rectangle(p.X, p.Y, c.Width, c.Height);
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     public struct WINDOWPLACEMENT

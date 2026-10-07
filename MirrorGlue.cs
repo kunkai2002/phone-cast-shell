@@ -6,29 +6,33 @@ namespace PhoneCastShell;
 /// <summary>網頁回報的「那張圖」位置：CSS 像素、相對 WebView 左上角；C 開頭是對話捲動區（看得見的範圍）。</summary>
 record SlotInfo(float X, float Y, float W, float H, float Cx, float Cy, float Cw, float Ch, float Dpr);
 
-record MirrorState(bool Found, int W, int H, string Title);
+record MirrorState(bool Found, int W, int H, string App, string Title);
 
 /// <summary>
-/// 把別的程式的投屏視窗收進殼裡：
+/// 把投屏視窗收進殼裡：
 /// 1. 殼上放一個容器（host），位置＝「那張圖」在對話裡看得見的那一塊；
-/// 2. 投屏視窗改成容器的子視窗（SetParent），往左上錯開，讓標題列、工具列落在容器外面被切掉；
+/// 2. 投屏視窗改成容器的子視窗（SetParent），拿掉系統標題列、保持客戶區大小不變，
+///    再往左上錯開，讓投屏軟體自己的標題列、工具列落在容器外面被切掉；
 /// 3. 捲動時容器跟著縮放移動，捲出範圍就藏起來；老闆鍵也是藏容器。
-/// 不用 SetWindowRgn：O+ 的投屏視窗（phoneCast.exe，Qt）直接把畫面交給合成器，裁切區域對它無效，
+/// 不用 SetWindowRgn：O+ 的 phoneCast（Qt）直接把畫面交給合成器，裁切區域對它無效，
 /// 但子視窗被父視窗邊界切掉這件事它躲不掉。
 /// 點擊不轉發：滑鼠本來就落在投屏視窗上。
 /// </summary>
 sealed class MirrorGlue
 {
-    static readonly string[] MainWindowTitles = { "O+ 互聯", "O+ 互联", "O+Connect", "O+ Connect" };
-
     readonly Form shell;
     readonly Settings s;
     readonly Func<Point> viewportOrigin;
     readonly Panel host = new() { Visible = false, BackColor = Color.FromArgb(0xE9, 0xE6, 0xDC) };
 
     public IntPtr Hwnd { get; private set; }
-    IntPtr origOwner, origStyle;
+    IntPtr origOwner, origStyle, origExStyle;
     RECT origRect;
+
+    /// <summary>目前這個投屏程式的名字與裁切量（DIP）。</summary>
+    public string AppName { get; private set; } = "";
+    string profileKey = "";
+    public Insets Cut { get; private set; } = new();
 
     SlotInfo? slot;
     bool boss;
@@ -66,11 +70,38 @@ sealed class MirrorGlue
         Tick();
     }
 
+    /// <summary>丟掉這個程式存的裁切量，放回去再收一次（會重新自動判斷）。</summary>
+    public void Redetect()
+    {
+        if (Hwnd == IntPtr.Zero) return;
+        s.Profiles.Remove(profileKey);
+        var h = Hwnd;
+        Release();
+        Lock(h);
+        Tick();
+    }
+
+    public void AdjustInset(string side, int delta)
+    {
+        if (Hwnd == IntPtr.Zero) return;
+        var c = Cut;
+        switch (side)
+        {
+            case "left": c.Left = Math.Max(0, c.Left + delta); break;
+            case "top": c.Top = Math.Max(0, c.Top + delta); break;
+            case "right": c.Right = Math.Max(0, c.Right + delta); break;
+            case "bottom": c.Bottom = Math.Max(0, c.Bottom + delta); break;
+        }
+        s.Profiles[profileKey] = c;
+        s.Save();
+        Tick();
+    }
+
     public void Tick()
     {
         if (shell.WindowState == FormWindowState.Minimized) return;
 
-        // 投屏結束時 phoneCast 會把視窗毀掉或藏起來；容器藏起來時子視窗的 IsWindowVisible 也是 false，所以看它自己的 WS_VISIBLE
+        // 投屏結束時視窗會被毀掉或藏起來；容器藏起來時子視窗的 IsWindowVisible 也是 false，所以看它自己的 WS_VISIBLE
         if (Hwnd != IntPtr.Zero && !(IsWindow(Hwnd) && (GetWindowLongPtr(Hwnd, GWL_STYLE).ToInt64() & WS_VISIBLE) != 0))
             Release();
 
@@ -90,7 +121,7 @@ sealed class MirrorGlue
         if (g.Value.Content != lastContent)
         {
             lastContent = g.Value.Content;
-            Changed?.Invoke(new MirrorState(true, lastContent.Width, lastContent.Height, GetTitle(Hwnd)));
+            Changed?.Invoke(new MirrorState(true, lastContent.Width, lastContent.Height, AppName, GetTitle(Hwnd)));
         }
         Layout(g.Value);
     }
@@ -106,7 +137,7 @@ sealed class MirrorGlue
         Tick();
     }
 
-    /// <summary>手動指定：拿滑鼠底下那個視窗（不限 O+，scrcpy 之類的也行）。</summary>
+    /// <summary>手動指定：拿滑鼠底下那個視窗（名單以外的投屏軟體也行），並把那個程式記進自動尋找。</summary>
     public bool PickUnderCursor()
     {
         if (!GetCursorPos(out var p)) return false;
@@ -115,12 +146,13 @@ sealed class MirrorGlue
         GetWindowThreadProcessId(root, out var pid);
         if (pid == Environment.ProcessId) return Hwnd != IntPtr.Zero; // 指到的是已經收進來的那個
 
-        string? procName = null;
-        try { using var proc = Process.GetProcessById((int)pid); procName = proc.ProcessName; } catch { }
-        if (procName == null) return false;
+        var procName = ProcessName(root);
+        if (procName.Length == 0) return false;
 
         Release();
-        s.TargetProcess = procName;
+        var names = s.TargetProcess.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+        if (!names.Contains(procName, StringComparer.OrdinalIgnoreCase)) names.Add(procName);
+        s.TargetProcess = string.Join(",", names);
         s.Save();
         Lock(root);
         Tick();
@@ -138,37 +170,33 @@ sealed class MirrorGlue
         {
             SetParent(h, IntPtr.Zero);
             SetWindowLongPtr(h, GWL_STYLE, origStyle);
+            SetWindowLongPtr(h, GWL_EXSTYLE, origExStyle);
             if (origOwner != IntPtr.Zero) SetWindowLongPtr(h, GWLP_HWNDPARENT, origOwner);
             SetWindowPos(h, HWND_TOP, origRect.Left, origRect.Top, origRect.Width, origRect.Height,
                 SWP_NOACTIVATE | SWP_FRAMECHANGED);
         }
-        Changed?.Invoke(new MirrorState(false, 0, 0, ""));
+        Changed?.Invoke(new MirrorState(false, 0, 0, "", ""));
     }
 
     IntPtr Find()
     {
-        var pids = new HashSet<uint>();
-        foreach (var name in s.TargetProcess.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-            foreach (var p in Process.GetProcessesByName(name))
-            {
-                pids.Add((uint)p.Id);
-                p.Dispose();
-            }
-        if (pids.Count == 0) return IntPtr.Zero;
-
         IntPtr best = IntPtr.Zero;
         long bestScore = 0;
         EnumWindows((h, _) =>
         {
             if (!IsWindowVisible(h)) return true; // 縮到最小的也算 visible，大小用 NormalRect 量
-            GetWindowThreadProcessId(h, out var pid);
-            if (!pids.Contains(pid)) return true;
-            if (MainWindowTitles.Contains(GetTitle(h))) return true;
             var r = NormalRect(h);
             if (r.Width < 150 || r.Height < 150) return true;
+            var proc = ProcessName(h);
+            if (proc.Length == 0) return true;
+            var app = MirrorApps.Match(proc, GetTitle(h), s.TargetProcess);
+            if (app == null) return true;
 
-            // 直式優先（手機投屏剛打開幾乎都是直的），同樣是直式就挑大的
-            long score = (long)r.Width * r.Height + (r.Height > r.Width * 1.15 ? 1L << 40 : 0);
+            bool portrait = r.Height > r.Width * 1.3;
+            if (app.PortraitOnly && !portrait) return true;
+            // 使用者手動指定過的＞有量過裁切量的（確定是投屏視窗本人）＞直式＞大的
+            bool picked = s.TargetProcess.Split(',', StringSplitOptions.TrimEntries).Contains(proc, StringComparer.OrdinalIgnoreCase);
+            long score = (long)r.Width * r.Height + (portrait ? 1L << 40 : 0) + (app.Insets != null ? 1L << 41 : 0) + (picked ? 1L << 42 : 0);
             if (score > bestScore) { bestScore = score; best = h; }
             return true;
         }, IntPtr.Zero);
@@ -180,20 +208,48 @@ sealed class MirrorGlue
         if (IsIconic(h))
         {
             ShowWindow(h, SW_RESTORE); // 子視窗不能是最小化狀態
-            Thread.Sleep(150);
+            Thread.Sleep(200);
         }
+        var proc = ProcessName(h);
+        var app = MirrorApps.Match(proc, GetTitle(h), s.TargetProcess);
+        AppName = app?.Name ?? proc;
+        profileKey = proc.ToLowerInvariant();
+
         origOwner = GetWindowLongPtr(h, GWLP_HWNDPARENT);
         origStyle = GetWindowLongPtr(h, GWL_STYLE);
+        origExStyle = GetWindowLongPtr(h, GWL_EXSTYLE);
         GetWindowRect(h, out origRect);
+        var client = ClientScreenRect(h);
+
+        // 裁切量：存過的＞名單裡量好的＞自動判斷＞不切
+        if (s.Profiles.TryGetValue(profileKey, out var saved)) Cut = saved.Clone();
+        else
+        {
+            Cut = app?.Insets?.Clone() ?? ToDip(InsetDetector.Detect(h, client), h) ?? new Insets();
+            s.Profiles[profileKey] = Cut.Clone();
+            s.Save();
+        }
 
         long st = origStyle.ToInt64();
         st &= ~(WS_POPUP | WS_CAPTION | WS_THICKFRAME | WS_MINIMIZE | WS_MAXIMIZE);
         st |= WS_CHILD;
+        long ex = origExStyle.ToInt64() & ~(WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE | WS_EX_APPWINDOW | WS_EX_TOPMOST);
         SetParent(h, host.Handle);
         SetWindowLongPtr(h, GWL_STYLE, new IntPtr(st));
-        SetWindowPos(h, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        SetWindowLongPtr(h, GWL_EXSTYLE, new IntPtr(ex));
+        // 拿掉系統標題列、邊框後，把視窗設成原本客戶區的大小，畫面內容才不會被拉伸或多出黑邊
+        SetWindowPos(h, HWND_TOP, 0, 0, client.Width, client.Height, SWP_NOMOVE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
         Hwnd = h;
         lastContent = Size.Empty;
+    }
+
+    static Insets? ToDip(Padding? px, IntPtr h)
+    {
+        if (px is not { } p) return null;
+        float k = GetDpiForWindow(h) / 96f;
+        if (k <= 0) k = 1;
+        int D(int v) => (int)Math.Round(v / k);
+        return new Insets(D(p.Left), D(p.Top), D(p.Right), D(p.Bottom));
     }
 
     /// <param name="Win">投屏視窗大小</param>
@@ -206,9 +262,9 @@ sealed class MirrorGlue
         if (!GetWindowRect(Hwnd, out var win)) return null;
         float k = GetDpiForWindow(Hwnd) / 96f;
         if (k <= 0) k = 1;
-        int l = (int)Math.Round(s.InsetLeft * k), t = (int)Math.Round(s.InsetTop * k);
-        int w = win.Width - l - (int)Math.Round(s.InsetRight * k);
-        int h = win.Height - t - (int)Math.Round(s.InsetBottom * k);
+        int l = (int)Math.Round(Cut.Left * k), t = (int)Math.Round(Cut.Top * k);
+        int w = win.Width - l - (int)Math.Round(Cut.Right * k);
+        int h = win.Height - t - (int)Math.Round(Cut.Bottom * k);
         if (w < 40 || h < 40) return null; // 切過頭了
         return new Geo(new Size(win.Width, win.Height), new Point(l, t), new Size(w, h));
     }
@@ -253,6 +309,14 @@ sealed class MirrorGlue
         lastRgn = sig;
         var rgn = CreateRoundRectRgn(full.Left, full.Top, full.Right + 1, full.Bottom + 1, r * 2, r * 2);
         if (SetWindowRgn(host.Handle, rgn, true) == 0) DeleteObject(rgn);
+    }
+
+    static string ProcessName(IntPtr h)
+    {
+        GetWindowThreadProcessId(h, out var pid);
+        if (pid == Environment.ProcessId) return "";
+        try { using var p = Process.GetProcessById((int)pid); return p.ProcessName; }
+        catch { return ""; }
     }
 
     static RECT NormalRect(IntPtr h)

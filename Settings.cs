@@ -1,22 +1,26 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace PhoneCastShell;
 
 sealed class Settings
 {
-    const int CurrentVersion = 2;
+    const int CurrentVersion = 3;
 
-    /// <summary>設定檔格式版本；舊版（v1 用 O+Connect、裁切全 0）讀進來時換成 v2 的預設值。</summary>
+    /// <summary>設定檔格式版本：v2 只有一組裁切量（給 O+），v3 起每個投屏程式各存一組。</summary>
     public int Version { get; set; } = CurrentVersion;
 
-    /// <summary>投屏視窗屬於哪個程式（不含 .exe，逗號分隔）。O+互聯的投屏畫面是另一個 Qt 程式 phoneCast.exe。手動指定別的視窗時會改成那個程式。</summary>
-    public string TargetProcess { get; set; } = "phoneCast,O+Connect";
+    /// <summary>名單（MirrorApps）以外、也要自動找的程式名稱（不含 .exe，逗號分隔）。手動指定時會自動加進來。</summary>
+    public string TargetProcess { get; set; } = "";
 
-    /// <summary>從投屏視窗外框往內切掉多少（DIP，跟著縮放比例換算）。預設值是 phoneCast 實測：上標題列 44、下導覽列 44、左右白邊各 4。</summary>
-    public int InsetLeft { get; set; } = 4;
-    public int InsetTop { get; set; } = 44;
-    public int InsetRight { get; set; } = 4;
-    public int InsetBottom { get; set; } = 44;
+    /// <summary>每個投屏程式的裁切量，鍵＝程式名稱小寫。第一次接上時自動判斷，之後照這裡。</summary>
+    public Dictionary<string, Insets> Profiles { get; set; } = new();
+
+    // v2 的單組裁切量，只在讀舊檔時用來搬家
+    public int? InsetLeft { get; set; }
+    public int? InsetTop { get; set; }
+    public int? InsetRight { get; set; }
+    public int? InsetBottom { get; set; }
 
     public string BossHotkey { get; set; } = "Alt+Q";
 
@@ -32,7 +36,12 @@ sealed class Settings
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhoneCastShell");
     static string FilePath => Path.Combine(Dir, "settings.json");
 
-    static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+    static readonly JsonSerializerOptions Json = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping, // 中文、+ 號照原樣寫，手改比較好讀
+    };
 
     public static Settings Load()
     {
@@ -40,20 +49,27 @@ sealed class Settings
         {
             if (File.Exists(FilePath))
             {
-                var s = JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath)) ?? new Settings();
-                if (!File.ReadAllText(FilePath).Contains("\"Version\"") || s.Version < CurrentVersion)
-                {
-                    var d = new Settings();
-                    s.TargetProcess = d.TargetProcess;
-                    (s.InsetLeft, s.InsetTop, s.InsetRight, s.InsetBottom) = (d.InsetLeft, d.InsetTop, d.InsetRight, d.InsetBottom);
-                    s.Version = CurrentVersion;
-                    s.Save();
-                }
+                var text = File.ReadAllText(FilePath);
+                var s = JsonSerializer.Deserialize<Settings>(text, Json) ?? new Settings();
+                if (!text.Contains("\"Version\"")) s.Version = 1;
+                if (s.Version < CurrentVersion) s.Migrate();
                 return s;
             }
         }
         catch { /* 檔案壞了就用預設值，下次存檔會蓋掉 */ }
         return new Settings();
+    }
+
+    void Migrate()
+    {
+        // v1 的裁切量是 0 而且找錯程式；v2 的是給 O+ 投屏視窗量好的，搬進 phonecast 那一組
+        if (Version == 2 && InsetTop is { } t)
+            Profiles["phonecast"] = new Insets(InsetLeft ?? 0, t, InsetRight ?? 0, InsetBottom ?? 0);
+        InsetLeft = InsetTop = InsetRight = InsetBottom = null;
+        // v1、v2 預設寫進去的程式名稱現在由內建名單負責
+        if (TargetProcess is "phoneCast,O+Connect" or "O+Connect" or "phoneCast") TargetProcess = "";
+        Version = CurrentVersion;
+        Save();
     }
 
     public void Save()

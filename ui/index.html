@@ -179,11 +179,13 @@ svg { display: block; }
           <button class="btn" id="pick">手動指定</button>
         </div>
         <p id="pickHint" style="margin:8px 0 0;display:none"></p>
+        <p id="supported" style="margin:8px 0 0"></p>
       </div>
       <div class="group">
         <h3>裁切</h3>
-        <p>把投屏視窗的標題列、工具列切掉，只留手機畫面。按住 Shift 一次切 10。</p>
+        <p>把投屏視窗的標題列、工具列切掉，只留手機畫面。按住 Shift 一次切 10。<br><span id="cutApp"></span></p>
         <div class="inset-grid" id="insets"></div>
+        <div class="row-btns" style="margin-top:10px"><button class="btn" id="redetect">自動判斷</button></div>
       </div>
       <div class="group">
         <h3>大小</h3>
@@ -549,6 +551,7 @@ document.addEventListener('click', () => $('menu').classList.remove('open'));
 $('openSettings').onclick = () => { $('menu').classList.remove('open'); $('panel').classList.add('open'); };
 $('closeSettings').onclick = () => $('panel').classList.remove('open');
 $('rescan').onclick = () => post({ type: 'rescan' });
+$('redetect').onclick = () => post({ type: 'redetect' });
 document.querySelectorAll('[data-zoom]').forEach(b => b.onclick = () => post({ type: 'zoom', factor: +b.dataset.zoom }));
 
 let pickTimer = 0;
@@ -572,9 +575,10 @@ $('insets').addEventListener('click', e => {
   post({ type: 'inset', side: b.dataset.side, delta: +b.dataset.d * (e.shiftKey ? 10 : 1) });
 });
 
-function showStatus(found, title) {
+function showStatus(found, app) {
   $('stDot').classList.toggle('ok', found);
-  $('stText').textContent = found ? `已接上${title ? `：${title}` : ''}` : '找不到投屏視窗';
+  $('stText').textContent = found ? `已接上${app ? `：${app}` : ''}` : '找不到投屏視窗';
+  $('cutApp').textContent = found && app ? `目前是「${app}」的裁切，每個投屏軟體各記一組。` : '接上投屏視窗後才能調。';
 }
 
 // ── 跟殼溝通 ──
@@ -582,14 +586,15 @@ if (host) host.addEventListener('message', e => {
   const m = e.data;
   if (m.type === 'mirror') {
     mirror = m;
-    showStatus(m.found, m.title);
+    showStatus(m.found, m.app);
     sizeSlot();
   } else if (m.type === 'boss') {
     if (boss !== m.on) { boss = m.on; render(); }
   } else if (m.type === 'settings') {
     for (const [k] of SIDES) $('in-' + k).textContent = m.insets[k];
     $('hotkey').textContent = m.hotkey;
-    showStatus(m.found, m.title);
+    $('supported').textContent = `會自動找：${m.supported}。其他投屏軟體用「手動指定」。`;
+    showStatus(m.found, m.app);
   } else if (m.type === 'picked') {
     $('pickHint').textContent = m.ok ? '已接上。' : '沒抓到視窗，再試一次。';
   }

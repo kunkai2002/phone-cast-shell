@@ -15,7 +15,7 @@ sealed class MainForm : Form
     readonly MirrorGlue glue;
     readonly System.Windows.Forms.Timer ticker = new() { Interval = 100 };
     readonly System.Windows.Forms.Timer pickTimer = new() { Interval = 3000 };
-    MirrorState state = new(false, 0, 0, "");
+    MirrorState state = new(false, 0, 0, "", "");
     bool pageReady;
 
     public MainForm(Settings settings)
@@ -33,7 +33,7 @@ sealed class MainForm : Form
         Controls.Add(web);
 
         glue = new MirrorGlue(this, settings, () => web.PointToScreen(Point.Empty));
-        glue.Changed += st => { state = st; Post(StateMessage()); };
+        glue.Changed += st => { state = st; Post(StateMessage()); Post(SettingsMessage()); };
 
         LocationChanged += (_, _) => glue.Tick();
         SizeChanged += (_, _) => glue.Tick();
@@ -95,17 +95,11 @@ sealed class MainForm : Form
                 ToggleBoss();
                 break;
             case "inset":
-                var side = m.GetProperty("side").GetString();
-                int d = (int)F("delta");
-                switch (side)
-                {
-                    case "left": settings.InsetLeft = Math.Max(0, settings.InsetLeft + d); break;
-                    case "top": settings.InsetTop = Math.Max(0, settings.InsetTop + d); break;
-                    case "right": settings.InsetRight = Math.Max(0, settings.InsetRight + d); break;
-                    case "bottom": settings.InsetBottom = Math.Max(0, settings.InsetBottom + d); break;
-                }
-                settings.Save();
-                glue.Tick();
+                glue.AdjustInset(m.GetProperty("side").GetString() ?? "", (int)F("delta"));
+                Post(SettingsMessage());
+                break;
+            case "redetect":
+                glue.Redetect();
                 Post(SettingsMessage());
                 break;
             case "zoom":
@@ -136,16 +130,17 @@ sealed class MainForm : Form
         }
     }
 
-    object StateMessage() => new { type = "mirror", found = state.Found, w = state.W, h = state.H, title = state.Title };
+    object StateMessage() => new { type = "mirror", found = state.Found, w = state.W, h = state.H, app = state.App, title = state.Title };
 
     object SettingsMessage() => new
     {
         type = "settings",
-        insets = new { left = settings.InsetLeft, top = settings.InsetTop, right = settings.InsetRight, bottom = settings.InsetBottom },
-        process = settings.TargetProcess,
+        insets = new { left = glue.Cut.Left, top = glue.Cut.Top, right = glue.Cut.Right, bottom = glue.Cut.Bottom },
         hotkey = settings.BossHotkey,
         found = state.Found,
+        app = state.App,
         title = state.Title,
+        supported = MirrorApps.SupportedList,
     };
 
     void Post(object msg)
