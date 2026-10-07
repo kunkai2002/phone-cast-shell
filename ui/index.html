@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 助手</title>
+<style>
+:root {
+  --bg: #faf9f5;
+  --side: #f5f4ee;
+  --line: #e6e3d8;
+  --line-strong: #d9d5c7;
+  --text: #2f2d27;
+  --text-2: #6b6858;
+  --text-3: #9a9686;
+  --bubble: #efece3;
+  --hover: #ece9de;
+  --accent: #d97757;
+  --accent-hover: #c4654a;
+  --card: #ffffff;
+  --serif: "Tiempos Text", "Source Han Serif TC", "Noto Serif TC", "Noto Serif CJK TC", "PMingLiU", Georgia, serif;
+  --sans: "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; }
+body { overflow: hidden; user-select: none; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+svg { display: block; }
+
+.app { display: flex; height: 100vh; }
+
+/* ── 側欄 ── */
+.side { position: relative; width: 268px; flex: none; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 10px 8px 8px; }
+.side-top { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 12px; }
+.brand { display: flex; align-items: center; gap: 8px; font-family: var(--serif); font-size: 19px; letter-spacing: .2px; }
+.icon-btn { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--text-2); }
+.icon-btn:hover { background: var(--hover); }
+.new-chat { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 9px; font-weight: 500; color: var(--accent); }
+.new-chat:hover { background: var(--hover); }
+.new-chat .plus { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; }
+.nav { margin: 4px 0 14px; }
+.nav button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 9px; color: var(--text); text-align: left; }
+.nav button:hover { background: var(--hover); }
+.nav svg { color: var(--text-2); }
+.sec { font-size: 12px; color: var(--text-3); padding: 6px 10px; }
+.recent { list-style: none; margin: 0; padding: 0; overflow: hidden; flex: 1; }
+.recent li { padding: 6px 10px; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); font-size: 13.5px; cursor: pointer; }
+.recent li:hover { background: var(--hover); }
+.recent li.on { background: var(--hover); }
+.me { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; border-top: 1px solid var(--line); margin-top: 6px; cursor: pointer; }
+.me:hover { background: var(--hover); }
+.avatar { width: 30px; height: 30px; border-radius: 50%; background: #3d3a32; color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 600; }
+.me .name { font-size: 13.5px; }
+.me .plan { font-size: 12px; color: var(--text-3); }
+.me .chev { margin-left: auto; color: var(--text-3); }
+
+.menu { position: absolute; left: 8px; right: 8px; bottom: 60px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 28px rgba(40,35,20,.12); padding: 6px; display: none; z-index: 5; }
+.menu.open { display: block; }
+.menu .mail { font-size: 12px; color: var(--text-3); padding: 6px 10px 8px; }
+.menu button { display: block; width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px; }
+.menu button:hover { background: var(--hover); }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+
+/* 設定面板蓋在側欄上：投屏視窗浮在對話欄，面板放這裡才不會被它擋住 */
+.panel { position: absolute; inset: 0; background: var(--side); padding: 14px 14px 12px; display: none; flex-direction: column; gap: 14px; z-index: 6; overflow: auto; }
+.panel.open { display: flex; }
+.panel h2 { font-family: var(--serif); font-weight: 500; font-size: 18px; margin: 2px 2px 0; }
+.group { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.group h3 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+.group p { margin: 0 0 10px; font-size: 12px; color: var(--text-2); line-height: 1.55; }
+.status { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 10px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #c9c4b3; flex: none; }
+.dot.ok { background: #6a9a5b; }
+.row-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line-strong); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; background: var(--bg); }
+.btn:hover { background: var(--hover); }
+.btn.primary { background: var(--text); color: #fff; border-color: var(--text); }
+.inset-grid { display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; align-items: center; font-size: 13px; }
+.stepper { display: flex; align-items: center; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+.stepper button { width: 28px; height: 26px; display: grid; place-items: center; color: var(--text-2); }
+.stepper button:hover { background: var(--hover); }
+.stepper span { min-width: 34px; text-align: center; font-variant-numeric: tabular-nums; font-size: 12.5px; }
+.kbd { display: inline-block; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 5px; padding: 0 6px; font-size: 12px; background: var(--bg); }
+.panel .done { margin-top: auto; }
+
+/* ── 主欄 ── */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.topbar { height: 52px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; }
+.title-btn { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; font-size: 14px; max-width: 60vw; }
+.title-btn:hover { background: var(--hover); }
+.title-btn span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.share { border: 1px solid var(--line-strong); border-radius: 8px; padding: 5px 12px; font-size: 13px; }
+.share:hover { background: var(--hover); }
+
+.scroll { flex: 1; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: #d6d2c4 transparent; }
+.thread { max-width: 760px; margin: 0 auto; padding: 12px 24px 40px; }
+
+.msg { margin: 0 0 26px; }
+.msg.user { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.bubble { background: var(--bubble); border-radius: 18px; padding: 10px 16px; max-width: 82%; line-height: 1.6; font-size: 15px; white-space: pre-wrap; user-select: text; }
+.shot { position: relative; border-radius: 14px; overflow: hidden; background: #e9e6dc; flex: none; }
+.shot svg { width: 100%; height: 100%; }
+
+.msg.ai { font-family: var(--serif); font-size: 16px; line-height: 1.75; color: var(--text); user-select: text; }
+.msg.ai p { margin: 0 0 14px; }
+.msg.ai h3 { font-family: var(--serif); font-size: 17px; font-weight: 600; margin: 22px 0 8px; }
+.msg.ai ul, .msg.ai ol { margin: 0 0 14px; padding-left: 24px; }
+.msg.ai li { margin: 4px 0; padding-left: 2px; }
+.msg.ai strong { font-weight: 600; }
+.msg.ai code { font-family: Consolas, monospace; font-size: 13.5px; background: #f0ede4; border-radius: 4px; padding: 1px 5px; }
+.actions { display: flex; gap: 2px; margin-top: 2px; font-family: var(--sans); }
+.actions button { width: 30px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: var(--text-3); }
+.actions button:hover { background: var(--hover); color: var(--text-2); }
+.actions .note { margin-left: 8px; align-self: center; font-size: 12px; color: var(--text-3); }
+.caret::after { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); margin-left: 4px; vertical-align: 1px; animation: pulse 1s infinite ease-in-out; }
+@keyframes pulse { 50% { opacity: .35; transform: scale(.8); } }
+.spark-wait { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-family: var(--sans); font-size: 13px; }
+.spark-wait svg { animation: spin 2.4s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── 輸入框 ── */
+.composer-wrap { flex: none; padding: 0 24px 10px; }
+.composer { max-width: 760px; margin: 0 auto; background: var(--card); border: 1px solid var(--line-strong); border-radius: 18px; box-shadow: 0 2px 10px rgba(40,35,20,.05); padding: 12px 12px 10px 16px; }
+.composer:focus-within { border-color: #c8c2b0; }
+.composer textarea { width: 100%; border: 0; outline: 0; resize: none; font: inherit; font-size: 15px; line-height: 1.55; max-height: 180px; background: transparent; color: var(--text); padding: 2px 0 8px; }
+.composer textarea::placeholder { color: var(--text-3); }
+.c-row { display: flex; align-items: center; gap: 6px; }
+.c-btn { width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 9px; display: grid; place-items: center; color: var(--text-2); }
+.c-btn:hover { background: var(--hover); }
+.model { margin-left: auto; display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 8px; color: var(--text-2); font-size: 13px; }
+.model:hover { background: var(--hover); }
+.send { width: 32px; height: 32px; border-radius: 9px; background: var(--accent); color: #fff; display: grid; place-items: center; opacity: .45; }
+.send.on { opacity: 1; }
+.send.on:hover { background: var(--accent-hover); }
+.disclaimer { text-align: center; font-size: 11.5px; color: var(--text-3); padding-top: 8px; }
+
+@media (max-width: 980px) { .side { width: 228px; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="side-top">
+      <div class="brand"><svg id="logo" width="22" height="22" viewBox="0 0 24 24"></svg><span id="brandName">AI 助手</span></div>
+      <button class="icon-btn" title="收合側欄"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg></button>
+    </div>
+    <button class="new-chat" id="newChat"><span class="plus"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>新對話</button>
+    <div class="nav">
+      <button><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5V16.5H5A1.5 1.5 0 0 1 3.5 15V7A1.5 1.5 0 0 1 5 5.5Z"/></svg>對話</button>
+      <button><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3.5 7.5A2 2 0 0 1 5.5 5.5h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/></svg>專案</button>
+      <button><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>成品</button>
+    </div>
+    <div class="sec">最近</div>
+    <ul class="recent" id="recent"></ul>
+    <div class="me" id="me">
+      <div class="avatar" id="avatar">使</div>
+      <div><div class="name" id="userName">使用者</div><div class="plan">Pro 方案</div></div>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m8 10 4-4 4 4M8 14l4 4 4-4"/></svg>
+    </div>
+    <div class="menu" id="menu">
+      <div class="mail" id="account">使用者 的帳號</div>
+      <button id="openSettings">設定</button>
+      <button>語言</button>
+      <button>取得說明</button>
+      <hr>
+      <button>升級方案</button>
+      <button>了解更多</button>
+      <hr>
+      <button>登出</button>
+    </div>
+
+    <div class="panel" id="panel">
+      <h2>顯示設定</h2>
+      <div class="group">
+        <h3>畫面來源</h3>
+        <div class="status"><span class="dot" id="stDot"></span><span id="stText">尋找中…</span></div>
+        <div class="row-btns">
+          <button class="btn" id="rescan">重新尋找</button>
+          <button class="btn" id="pick">手動指定</button>
+        </div>
+        <p id="pickHint" style="margin:8px 0 0;display:none"></p>
+      </div>
+      <div class="group">
+        <h3>裁切</h3>
+        <p>把投屏視窗的標題列、工具列切掉，只留手機畫面。按住 Shift 一次切 10。</p>
+        <div class="inset-grid" id="insets"></div>
+      </div>
+      <div class="group">
+        <h3>大小</h3>
+        <div class="row-btns">
+          <button class="btn" data-zoom="0.9">縮小</button>
+          <button class="btn" data-zoom="1.1">放大</button>
+        </div>
+      </div>
+      <div class="group">
+        <h3>快速切換</h3>
+        <p style="margin:0">按 <span class="kbd" id="hotkey">Alt+Q</span> 把圖換成報表，再按一次換回來。任何時候都有效。</p>
+      </div>
+      <button class="btn primary done" id="closeSettings">完成</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="title-btn"><span id="chatTitle"></span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></button>
+      <button class="share">分享</button>
+    </header>
+    <div class="scroll" id="scroll"><div class="thread" id="thread"></div></div>
+    <footer class="composer-wrap">
+      <div class="composer">
+        <textarea id="input" rows="1" placeholder="回覆 AI 助手…"></textarea>
+        <div class="c-row">
+          <button class="c-btn" title="新增檔案"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+          <button class="c-btn" title="工具"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+          <button class="model"><span id="modelName">標準模型</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></button>
+          <button class="send" id="send" title="傳送"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+        </div>
+      </div>
+      <div class="disclaimer" id="disclaimer">AI 助手 可能會出錯，請再次確認回覆內容。</div>
+    </footer>
+  </main>
+</div>
+
+<script>
+'use strict';
+const host = window.chrome && window.chrome.webview;
+const post = m => host && host.postMessage(m);
+const $ = id => document.getElementById(id);
+
+// ── 圖示 ──
+function sparkPath(cx, cy, r) {
+  let d = '';
+  for (let i = 0; i < 8; i++) {
+    const a = Math.PI * i / 4 + 0.2, len = i % 2 ? r * 0.78 : r;
+    d += `M${cx} ${cy}L${(cx + Math.cos(a) * len).toFixed(2)} ${(cy + Math.sin(a) * len).toFixed(2)}`;
+  }
+  return d;
+}
+const SPARK = (size, color = '#d97757') =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24"><path d="${sparkPath(12, 12, 10)}" stroke="${color}" stroke-width="2.6" stroke-linecap="round"/></svg>`;
+const RING = (size, color = '#d97757') =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="${color}" stroke-width="2.6"/><circle cx="12" cy="12" r="3" fill="${color}"/></svg>`;
+
+// 名稱、圖示、使用者由殼在載入前注入（settings.json 可改），沒注入時用通用預設
+const CFG = Object.assign({ name: 'AI 助手', model: '標準模型', user: '使用者', logo: 'ring' }, window.SHELL_CFG || {});
+const LOGO = size => (CFG.logo === 'spark' ? SPARK : RING)(size);
+$('logo').outerHTML = LOGO(22);
+$('brandName').textContent = CFG.name;
+$('modelName').textContent = CFG.model;
+$('userName').textContent = CFG.user;
+$('avatar').textContent = [...CFG.user][0].toUpperCase();
+$('account').textContent = `${CFG.user} 的帳號`;
+$('input').placeholder = `回覆 ${CFG.name}…`;
+$('disclaimer').textContent = `${CFG.name} 可能會出錯，請再次確認回覆內容。`;
+
+const ICON = {
+  copy: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></svg>',
+  up: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7.5 10.5v9h-3v-9ZM7.5 10.5l4-6.5a2 2 0 0 1 3.6 1.4l-.8 4.1h5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7.5"/></svg>',
+  down: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7.5 13.5v-9h-3v9ZM7.5 13.5l4 6.5a2 2 0 0 0 3.6-1.4l-.8-4.1h5a2 2 0 0 0 2-2.3l-1.2-6.5a2 2 0 0 0-2-1.7H7.5"/></svg>',
+  retry: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4"/></svg>',
+};
+const actionsHtml = () =>
+  `<div class="actions"><button title="複製">${ICON.copy}</button><button title="喜歡">${ICON.up}</button><button title="不喜歡">${ICON.down}</button><button title="重試">${ICON.retry}</button></div>`;
+
+// ── 極簡 markdown（只給罐頭回覆用）──
+function inline(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+}
+function md(src) {
+  const out = [];
+  let list = null;
+  const close = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  for (const raw of src.split('\n')) {
+    const line = raw.trimEnd();
+    let m;
+    if (!line) { close(); continue; }
+    if ((m = line.match(/^###\s+(.*)/))) { close(); out.push(`<h3>${inline(m[1])}</h3>`); continue; }
+    if ((m = line.match(/^[-*]\s+(.*)/))) { if (list !== 'ul') { close(); out.push('<ul>'); list = 'ul'; } out.push(`<li>${inline(m[1])}</li>`); continue; }
+    if ((m = line.match(/^\d+\.\s+(.*)/))) { if (list !== 'ol') { close(); out.push('<ol>'); list = 'ol'; } out.push(`<li>${inline(m[1])}</li>`); continue; }
+    close();
+    out.push(`<p>${inline(line)}</p>`);
+  }
+  close();
+  return out.join('');
+}
+
+// ── 兩套對話：平常（手機截圖）／老闆鍵（報表）──
+const RECENT = ['報價單格式統一的做法', 'Excel 樞紐分析表欄位設定', '供應商評估表的權重怎麼訂', '會議紀要整理成待辦清單', '英文合約條款的白話解釋', '專案時程甘特圖的排法', '週報開頭怎麼寫比較精簡'];
+
+const PHONE = {
+  title: 'App 首頁介面的改版建議',
+  intro: '我在整理一個手機 App 的使用體驗問題，等一下傳截圖給你，幫我從資訊層級和操作路徑兩個角度看。',
+  introReply: `好的，傳上來吧。我會照這個順序看：
+
+1. **第一眼**：打開畫面三秒內，視線會先落在哪裡
+2. **資訊層級**：最重要的資訊有沒有放在最顯眼的位置
+3. **操作路徑**：最常用的動作要點幾下才完成
+
+如果有特定的使用情境（例如在戶外單手操作、或是給不熟手機的人用），也可以一起告訴我。`,
+  ask: '這是目前的畫面，幫我看看哪裡可以改。',
+  answer: `整體看下來，這個畫面的骨架是對的，主要問題在**資訊太平均**：每一塊看起來都一樣重要，使用者反而不知道先看哪裡。
+
+### 資訊層級
+
+- **頂部區域**佔了不少高度，放的卻是使用頻率最低的內容，建議壓縮成一行。
+- 卡片之間的間距都一樣，看不出分組。相關的內容靠近一點、不相關的拉開，比加分隔線更有效。
+- 次要文字的對比偏低，在戶外強光下會看不清楚。
+
+### 操作路徑
+
+- 最常用的動作在畫面下半部，單手拇指搆得到，這點很好。
+- 返回和關閉兩種操作的圖示太像，容易誤觸。
+- 列表項目看起來只有文字本身能點，建議整列都可以點。
+
+### 建議的調整順序
+
+1. 先拉開層級：主要數字放大，次要資訊縮小、變淡
+2. 重新分組：用間距代替分隔線
+3. 最後處理細節：圖示、點擊區域、對比度
+
+要不要我把第一步畫成線框稿，讓你直接拿去跟設計討論？`,
+};
+
+const REPORT = {
+  title: '第三季產值趨勢分析',
+  intro: '我在整理第三季的經營數據，等一下傳圖表給你，幫我看趨勢和異常值。',
+  introReply: `好的，傳上來吧。我會照這個順序看：
+
+1. **整體趨勢**：是穩定成長、持平，還是有轉折
+2. **異常值**：哪個月份明顯偏離，可能的原因
+3. **達成率**：實際和目標的落差集中在哪裡
+
+如果有去年同期的數字，也可以一起給我，比較起來會更準。`,
+  ask: '這是 1～9 月的產值和目標達成率，幫我看看。',
+  answer: `整體來看是**前低後高**：上半年在目標附近徘徊，第三季開始明顯拉開。
+
+### 趨勢
+
+- 1～3 月偏低，符合農曆年前後的季節性，不算異常。
+- 4～6 月回到目標水準，但成長幅度不大。
+- **7～9 月連續三個月超過目標**，9 月達成率最高，是全年的高點。
+
+### 值得注意的地方
+
+- 2 月的達成率掉得最深，如果去年同期沒有這麼低，建議查一下是不是有訂單延後認列。
+- 第三季的成長主要來自產值本身增加，不是目標調低，這點在簡報時可以特別強調。
+
+### 簡報建議
+
+1. 標題直接講結論：「第三季連續三個月超標」
+2. 圖表保留柱狀＋折線，但把第三季的區塊加上底色
+3. 2 月的落差放在備註，不要佔主畫面
+
+需要的話，我可以幫你把這段整理成一頁簡報的文字稿。`,
+};
+
+// 打字送出後的罐頭回覆
+const CANNED = {
+  excel: `可以用這個做法：
+
+1. 先把資料轉成**表格**（Ctrl+T），之後新增的列會自動納入範圍
+2. 用 \`XLOOKUP\` 取代 \`VLOOKUP\`，欄位順序改了也不會錯
+3. 匯總用樞紐分析表，篩選條件放在「篩選」區，不要放在列標籤
+
+如果方便的話，貼幾列資料給我，我直接幫你寫公式。`,
+  meeting: `可以照這個格式整理：
+
+### 結論
+- 每一項只寫一句話，寫「決定了什麼」，不寫討論過程
+
+### 待辦
+- **誰**、**做什麼**、**什麼時候之前**，三個欄位缺一不可
+
+### 待確認
+- 會上沒有結論的事項，標註下次由誰提出
+
+把原始紀錄貼上來，我幫你直接整理成這個格式。`,
+  writing: `我把它改得精簡一點：
+
+- 第一句直接講結論，背景放後面
+- 刪掉「其實」「基本上」「相關的」這類不帶資訊的詞
+- 長句拆成兩句，每句只講一件事
+
+把原文貼上來，我逐段幫你改，並標出改了哪裡、為什麼。`,
+  code: `這類問題通常出在三個地方：
+
+1. **輸入的格式**跟預期不一樣（例如日期字串、空白字元）
+2. **非同步的順序**：資料還沒回來就先用了
+3. **邊界條件**：空陣列、零、找不到的鍵
+
+先把出錯那一行前後的值印出來，確認是哪一種，再決定怎麼改。可以把錯誤訊息貼給我。`,
+  general: `好問題。我分三點說：
+
+1. **先釐清目標**：這件事最後要交給誰、他最在意什麼
+2. **列出限制**：時間、預算、能動用的人
+3. **排優先順序**：先做影響最大、成本最低的那一項
+
+如果可以多給我一些背景，例如現在卡在哪一步，我可以給更具體的建議。`,
+};
+
+// 依照輸入的文字挑一段罐頭回覆
+function pickReply(text) {
+  const rules = [
+    ['excel', /excel|表格|公式|樞紐|函數|vlookup|xlookup|欄位|試算/i],
+    ['meeting', /會議|紀要|記錄|紀錄|待辦|週報|月報/],
+    ['writing', /改寫|潤飾|文案|信件|email|郵件|翻譯|摘要|精簡/i],
+    ['code', /程式|代碼|代码|bug|錯誤|報錯|error|python|js|sql/i],
+  ];
+  for (const [key, re] of rules) if (re.test(text)) return CANNED[key];
+  return CANNED.general;
+}
+
+// ── 圖：手機截圖的佔位／報表 ──
+function phonePlaceholder(w, h) {
+  const p = (x, y, ww, hh, r, c) => `<rect x="${x}" y="${y}" width="${ww}" height="${hh}" rx="${r}" fill="${c}"/>`;
+  const pad = w * 0.06, cw = w - pad * 2;
+  let s = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><rect width="${w}" height="${h}" fill="#f4f2ec"/>`;
+  s += p(pad, h * 0.035, cw * 0.18, h * 0.012, 3, '#d8d4c8') + p(w - pad - cw * 0.2, h * 0.035, cw * 0.2, h * 0.012, 3, '#d8d4c8');
+  s += p(pad, h * 0.08, cw * 0.55, h * 0.03, 6, '#cfcabb');
+  s += p(pad, h * 0.135, cw, h * 0.16, 14, '#e2ddd0');
+  for (let i = 0; i < 4; i++) {
+    const y = h * (0.33 + i * 0.12);
+    s += p(pad, y, cw, h * 0.1, 12, '#fff') + p(pad + cw * 0.05, y + h * 0.022, h * 0.055, h * 0.055, 10, '#e7e2d5');
+    s += p(pad + cw * 0.05 + h * 0.07, y + h * 0.028, cw * 0.45, h * 0.014, 3, '#d3cebf') + p(pad + cw * 0.05 + h * 0.07, y + h * 0.055, cw * 0.3, h * 0.012, 3, '#e3dfd3');
+  }
+  s += p(pad, h * 0.89, cw, h * 0.07, 16, '#fff');
+  return s + '</svg>';
+}
+
+function reportChart(w, h) {
+  const data = [62, 55, 70, 78, 81, 83, 92, 97, 104];
+  const goal = [70, 70, 72, 78, 80, 82, 84, 86, 88];
+  const L = 48, R = 16, T = 54, B = 40, pw = w - L - R, ph = h - T - B, max = 120;
+  const x = i => L + pw * (i + 0.5) / data.length, y = v => T + ph * (1 - v / max);
+  const bw = pw / data.length * 0.56;
+  let s = `<svg viewBox="0 0 ${w} ${h}"><rect width="${w}" height="${h}" fill="#fff"/>`;
+  s += `<text x="${L}" y="26" font-size="14" font-weight="600" fill="#2f2d27" font-family="Microsoft JhengHei UI, sans-serif">1～9 月產值與目標（百萬元）</text>`;
+  s += `<rect x="${L + pw * 6 / 9}" y="${T}" width="${pw * 3 / 9}" height="${ph}" fill="#f6efe6"/>`;
+  for (let v = 0; v <= max; v += 30) {
+    s += `<line x1="${L}" x2="${w - R}" y1="${y(v)}" y2="${y(v)}" stroke="#ece9df"/>`;
+    s += `<text x="${L - 8}" y="${y(v) + 4}" font-size="11" text-anchor="end" fill="#9a9686">${v}</text>`;
+  }
+  data.forEach((v, i) => {
+    s += `<rect x="${x(i) - bw / 2}" y="${y(v)}" width="${bw}" height="${ph - (y(v) - T)}" rx="3" fill="${i >= 6 ? '#b8714f' : '#cfa58c'}"/>`;
+    s += `<text x="${x(i)}" y="${h - B + 18}" font-size="11" text-anchor="middle" fill="#6b6858">${i + 1}月</text>`;
+  });
+  s += `<polyline fill="none" stroke="#4b6a78" stroke-width="2" stroke-dasharray="5 4" points="${goal.map((v, i) => `${x(i)},${y(v)}`).join(' ')}"/>`;
+  s += `<rect x="${w - R - 128}" y="14" width="10" height="10" rx="2" fill="#b8714f"/><text x="${w - R - 112}" y="23" font-size="11" fill="#6b6858">產值</text>`;
+  s += `<line x1="${w - R - 66}" x2="${w - R - 50}" y1="19" y2="19" stroke="#4b6a78" stroke-width="2" stroke-dasharray="4 3"/><text x="${w - R - 44}" y="23" font-size="11" fill="#6b6858">目標</text>`;
+  return s + '</svg>';
+}
+
+// ── 狀態 ──
+let boss = false;
+let mirror = { found: false, w: 0, h: 0 };
+const extra = [];  // 自己打字送出的對話
+
+function slotSize() {
+  const colW = Math.min(760, $('scroll').clientWidth) - 48;
+  if (boss) { const w = Math.min(620, colW); return { w, h: Math.round(w * 0.6) }; }
+  if (mirror.found && mirror.w > 0) {
+    const dpr = window.devicePixelRatio || 1;
+    return { w: mirror.w / dpr, h: mirror.h / dpr };
+  }
+  return { w: 330, h: 716 };
+}
+
+function sizeSlot() {
+  const el = $('slot');
+  if (!el) return;
+  const { w, h } = slotSize();
+  el.style.width = w + 'px';
+  el.style.height = h + 'px';
+  el.innerHTML = boss ? reportChart(Math.round(w), Math.round(h)) : phonePlaceholder(Math.round(w), Math.round(h));
+}
+
+function render() {
+  const c = boss ? REPORT : PHONE;
+  $('chatTitle').textContent = c.title;
+  document.title = c.title + ' - ' + CFG.name;
+  $('recent').innerHTML = [c.title, ...RECENT].map((t, i) => `<li class="${i ? '' : 'on'}">${t}</li>`).join('');
+  let html = '';
+  html += `<div class="msg user"><div class="bubble">${inline(c.intro)}</div></div>`;
+  html += `<div class="msg ai">${md(c.introReply)}${actionsHtml()}</div>`;
+  html += `<div class="msg user"><div class="shot" id="slot"></div><div class="bubble">${inline(c.ask)}</div></div>`;
+  html += `<div class="msg ai">${md(c.answer)}${actionsHtml()}</div>`;
+  for (const m of extra) html += m.role === 'user'
+    ? `<div class="msg user"><div class="bubble">${inline(m.text)}</div></div>`
+    : `<div class="msg ai">${md(m.text)}${m.done ? actionsHtml() : ''}</div>`;
+  $('thread').innerHTML = html;
+  sizeSlot();
+}
+
+// ── 假的送出＋逐字打出 ──
+const input = $('input');
+let streaming = false;
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(180, input.scrollHeight) + 'px';
+  $('send').classList.toggle('on', input.value.trim().length > 0);
+});
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+});
+$('send').onclick = send;
+
+function send() {
+  const text = input.value.trim();
+  if (!text || streaming) return;
+  input.value = '';
+  input.dispatchEvent(new Event('input'));
+  extra.push({ role: 'user', text });
+  render();
+  scrollBottom();
+
+  streaming = true;
+  const full = pickReply(text);
+  const thread = $('thread');
+  const box = document.createElement('div');
+  box.className = 'msg ai';
+  box.innerHTML = `<div class="spark-wait">${LOGO(18)}思考中…</div>`;
+  thread.appendChild(box);
+  scrollBottom();
+
+  let i = 0;
+  setTimeout(function tick() {
+    i = Math.min(full.length, i + 2 + Math.floor(Math.random() * 3));
+    box.innerHTML = md(full.slice(0, i));
+    const last = box.lastElementChild;
+    if (last && i < full.length) last.classList.add('caret');
+    keepBottom();
+    if (i < full.length) return setTimeout(tick, 28 + Math.random() * 40);
+    extra.push({ role: 'ai', text: full, done: true });
+    box.insertAdjacentHTML('beforeend', actionsHtml());
+    streaming = false;
+  }, 900 + Math.random() * 700);
+}
+const sc = $('scroll');
+function scrollBottom() { sc.scrollTop = sc.scrollHeight; }
+function keepBottom() { if (sc.scrollHeight - sc.scrollTop - sc.clientHeight < 120) scrollBottom(); }
+
+$('newChat').onclick = () => { extra.length = 0; render(); sc.scrollTop = 0; };
+
+// ── 帳號選單與設定 ──
+$('me').onclick = e => { e.stopPropagation(); $('menu').classList.toggle('open'); };
+document.addEventListener('click', () => $('menu').classList.remove('open'));
+$('openSettings').onclick = () => { $('menu').classList.remove('open'); $('panel').classList.add('open'); };
+$('closeSettings').onclick = () => $('panel').classList.remove('open');
+$('rescan').onclick = () => post({ type: 'rescan' });
+document.querySelectorAll('[data-zoom]').forEach(b => b.onclick = () => post({ type: 'zoom', factor: +b.dataset.zoom }));
+
+let pickTimer = 0;
+$('pick').onclick = () => {
+  clearInterval(pickTimer);
+  let n = 3;
+  const hint = $('pickHint');
+  hint.style.display = 'block';
+  const show = () => hint.textContent = `${n} 秒內把滑鼠移到投屏視窗上，不用點。`;
+  show();
+  post({ type: 'pick' });
+  pickTimer = setInterval(() => { n--; if (n > 0) show(); else { clearInterval(pickTimer); hint.textContent = '讀取中…'; } }, 1000);
+};
+
+const SIDES = [['top', '上'], ['bottom', '下'], ['left', '左'], ['right', '右']];
+$('insets').innerHTML = SIDES.map(([k, label]) =>
+  `<span>${label}</span><div class="stepper"><button data-side="${k}" data-d="-1">−</button><span id="in-${k}">0</span><button data-side="${k}" data-d="1">+</button></div>`).join('');
+$('insets').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  post({ type: 'inset', side: b.dataset.side, delta: +b.dataset.d * (e.shiftKey ? 10 : 1) });
+});
+
+function showStatus(found, title) {
+  $('stDot').classList.toggle('ok', found);
+  $('stText').textContent = found ? `已接上${title ? `：${title}` : ''}` : '找不到投屏視窗';
+}
+
+// ── 跟殼溝通 ──
+if (host) host.addEventListener('message', e => {
+  const m = e.data;
+  if (m.type === 'mirror') {
+    mirror = m;
+    showStatus(m.found, m.title);
+    sizeSlot();
+  } else if (m.type === 'boss') {
+    if (boss !== m.on) { boss = m.on; render(); }
+  } else if (m.type === 'settings') {
+    for (const [k] of SIDES) $('in-' + k).textContent = m.insets[k];
+    $('hotkey').textContent = m.hotkey;
+    showStatus(m.found, m.title);
+  } else if (m.type === 'picked') {
+    $('pickHint').textContent = m.ok ? '已接上。' : '沒抓到視窗，再試一次。';
+  }
+});
+
+// 每一幀量「那張圖」在哪，有變才回報（捲動、改視窗大小、版面變動都會跟著）
+let lastKey = '';
+(function loop() {
+  const el = $('slot');
+  if (el) {
+    const r = el.getBoundingClientRect(), c = sc.getBoundingClientRect();
+    const m = { type: 'slot', x: r.left, y: r.top, w: r.width, h: r.height, cx: c.left, cy: c.top, cw: c.width, ch: c.height, dpr: window.devicePixelRatio || 1 };
+    const key = JSON.stringify(m);
+    if (key !== lastKey) { lastKey = key; post(m); }
+  }
+  requestAnimationFrame(loop);
+})();
+
+window.addEventListener('resize', sizeSlot);
+render();
+post({ type: 'ready' });
+</script>
+</body>
+</html>
