@@ -1,4 +1,3 @@
-using System.Drawing.Drawing2D;
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
@@ -22,7 +21,7 @@ sealed class MainForm : Form
     {
         this.settings = settings;
         Text = settings.WindowTitle;
-        Icon = MakeIcon(settings.Logo);
+        Icon = AppIcon.ForWindow(settings.Logo);
         BackColor = Color.FromArgb(0xFA, 0xF9, 0xF5);
         StartPosition = FormStartPosition.Manual;
         var wa = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1600, 1000);
@@ -109,6 +108,23 @@ sealed class MainForm : Form
                 glue.Rescan();
                 Post(SettingsMessage());
                 break;
+            case "install":
+                try
+                {
+                    Installer.Install(settings, m.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "");
+                    Post(new { type = "installed", ok = true, message = $"已加到開始功能表：「{settings.ShortcutName}」。" });
+                }
+                catch (Exception ex)
+                {
+                    Post(new { type = "installed", ok = false, message = "沒加成功：" + ex.Message });
+                }
+                Post(SettingsMessage());
+                break;
+            case "uninstall":
+                Installer.Uninstall(settings);
+                Post(new { type = "installed", ok = true, message = "已從開始功能表移除。" });
+                Post(SettingsMessage());
+                break;
             case "pick":
                 pickTimer.Stop();
                 pickTimer.Start();
@@ -141,6 +157,8 @@ sealed class MainForm : Form
         app = state.App,
         title = state.Title,
         supported = MirrorApps.SupportedList,
+        installed = Installer.IsInstalled(settings),
+        shortcutName = settings.ShortcutName.Length > 0 ? settings.ShortcutName : Installer.DefaultName,
     };
 
     void Post(object msg)
@@ -189,29 +207,4 @@ sealed class MainForm : Form
     }
 
     public void ReleaseMirror() => glue.Release();
-
-    static Icon MakeIcon(string logo)
-    {
-        using var bmp = new Bitmap(64, 64);
-        using (var g = Graphics.FromImage(bmp))
-        {
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            var color = Color.FromArgb(0xD9, 0x77, 0x57);
-            using var pen = new Pen(color, 7) { StartCap = LineCap.Round, EndCap = LineCap.Round };
-            if (logo != "spark")
-            {
-                g.DrawEllipse(pen, 10, 10, 44, 44);
-                using var fill = new SolidBrush(color);
-                g.FillEllipse(fill, 24, 24, 16, 16);
-                return Icon.FromHandle(bmp.GetHicon());
-            }
-            for (int i = 0; i < 8; i++)
-            {
-                double a = Math.PI * i / 4 + 0.2;
-                float len = i % 2 == 0 ? 27 : 21;
-                g.DrawLine(pen, 32, 32, 32 + (float)Math.Cos(a) * len, 32 + (float)Math.Sin(a) * len);
-            }
-        }
-        return Icon.FromHandle(bmp.GetHicon());
-    }
 }

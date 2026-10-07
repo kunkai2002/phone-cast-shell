@@ -32,6 +32,9 @@ sealed class Settings
     public string Logo { get; set; } = "ring";
     public float CornerRadius { get; set; } = 14;
 
+    /// <summary>開始功能表捷徑的名字；空白＝還沒加到開始功能表。</summary>
+    public string ShortcutName { get; set; } = "";
+
     public static string Dir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhoneCastShell");
     static string FilePath => Path.Combine(Dir, "settings.json");

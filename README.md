@@ -28,6 +28,8 @@
 1. 到 [Releases](../../releases) 下載 `PhoneCastShell-win-x64.zip`，解壓縮。
 2. 需要 Windows 10／11、[.NET 8 桌面執行階段](https://dotnet.microsoft.com/download/dotnet/8.0)、WebView2 Runtime（Windows 11 內建）。
 3. 先開始投屏，再打開 `PhoneCastShell.exe`，大約一秒內會自動接上投屏視窗。
+   想從開始功能表打開：左下角頭像 → 設定 → 開始功能表，取個名字按「加到開始功能表」。程式會複製到 `%LOCALAPPDATA%\Programs\PhoneCastShell\`，之後解壓縮的資料夾可以刪掉。按「移除」會拿掉捷徑和那個資料夾。不寫登錄檔，也不需要系統管理員。
+   命令列也可以：`PhoneCastShell.exe --install 名字`、`PhoneCastShell.exe --uninstall`。
 4. 找不到時：點左下角頭像 → 設定 → 手動指定，3 秒內把滑鼠移到投屏視窗上。
 5. 切邊不對時：設定 → 裁切，按上、下、左、右的 − ＋（按住 Shift 一次調 10），或按「自動判斷」重新判斷一次。
 
@@ -53,6 +55,7 @@
 | `UserName` | `使用者` | 左下角的使用者名稱 |
 | `Logo` | `ring` | `ring`（圓環）或 `spark`（放射星） |
 | `CornerRadius` | `14` | 圖片圓角 |
+| `ShortcutName` | 空白 | 開始功能表捷徑的名字，空白＝還沒加；請用設定面板改，直接改這裡不會動到捷徑 |
 
 ## 原理
 
@@ -75,6 +78,7 @@ dotnet publish -c Release -r win-x64 --self-contained false -o dist
 ```
 
 需要 .NET 8 SDK。測試時可以用 `--process 程式名` 讓它這一次改找別的程式的視窗。
+`app.ico` 是用 `PhoneCastShell.exe --write-icon app.ico` 產生的，改了 `AppIcon.cs` 的圖案要重新產生。
 
 ## 聲明
 
